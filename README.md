@@ -52,8 +52,8 @@ Create a JSON object to describe your api.
             update        : "PUT      posts/:id",
             destroy       : "DELETE   posts/:id",
             comments      : "GET      posts/:id/posts/",
-            createComment : "POST     posts/:id/comments/ *body",
-            tagPost       : "POST     posts/:id/tag/tag_name *tag_name"
+            createComment : "POST     posts/:id/comments/       *body",
+            tagPost       : "POST     posts/:id/tag/:tag_name   *tag_name"
           }        
         },
   
@@ -97,9 +97,18 @@ Then you can access it like this:
   
     // makes an ajax call to http://api.blogapp.com/posts/123/comments?page=2
     mypost.comments({page:2})
+    
+    // makes an ajax call to http://api.blogapp.com/posts/123/tag/favorite
+    mypost.tagPost("favorite")
 
   
+All calls return a promise
 
+    BlogAPI.createComment(123, "This is a new Comment on post 123").then(function(response){
+        console.log(response)
+    }, function(err){
+        console.log(err)
+    })
 
 
 
