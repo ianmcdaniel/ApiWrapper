@@ -1,21 +1,22 @@
 var ApiWrapper = function(schema) {
 
+  var config = {};
+
   // promises
-  var P = function(context) {
+  var P = function() {
     var callbacks = [];
-    var execute = function(type, context, args) {
+    var execute = function(type, args) {
       while (callbacks.length) {
-        callbacks[0][type].apply(context, args);
+        callbacks[0][type].apply(this, args);
         callbacks.shift();
       }
     };
     return {
-      context: context || this,
       resolve: function() {
-        execute('fulfilled', this.context, arguments);
+        execute('fulfilled', arguments);
       },
       reject: function() {
-        execute('rejected', this.context, arguments);
+        execute('rejected', arguments);
       },
       then: function(onFulfilled, onRejected) {
         callbacks.push({ 'fulfilled': onFulfilled, 'rejected': onRejected });
@@ -36,19 +37,33 @@ var ApiWrapper = function(schema) {
     return d;
   }
 
+  function serialize(obj, prefix) {
+    var str = [];
+    for(var p in obj) {
+      if (obj.hasOwnProperty(p)) {
+        var k = prefix ? prefix + "[" + p + "]" : p, v = obj[p];
+        str.push(typeof v == "object" ?
+          serialize(v, k) :
+          encodeURIComponent(k) + "=" + encodeURIComponent(v));
+      }
+    }
+    return str.join("&");
+  }
 
   // ajax requests
-  function request(opts, context) {
+  function request(opts) {
     var 
       resp,
-      p   = new P(context),
+      url = opts.url,
+      p   = new P(),
       xhr = new XMLHttpRequest();
 
-    opts = extend(true,schema.ajaxOptions||{}, opts);
-    var url = [schema.apiPath,opts.url].join("/")
+    if(opts.type.match(/^get$/i) && opts.data) {
+      url += (url.indexOf("?") !== -1 ? "&" : "?") + encodeURIComponent(serialize(opts.data));
+    }
 
     xhr.dataType = opts.dataType || "json";
-    xhr.open(opts.type, opts.url, !opts.sync);
+    xhr.open(opts.type, url, !opts.sync);
     if (!opts.sync) {
       xhr.onreadystatechange = function () {
         if (this.readyState == 4) {
@@ -64,60 +79,96 @@ var ApiWrapper = function(schema) {
     for(header in opts.headers) {
       xhr.setRequestHeader(header,opts.headers[header]);  
     }
-    (opts.data) ? xhr.send(JSON.stringify(opts.data)) : xhr.send();
+    if (opts.data) {
+      xhr.send(JSON.stringify(opts.data))
+    } else {
+      xhr.send();
+    }
     if (opts.sync) return xhr.response;
     return p;
   }
 
 
-  function parseMethodString(string) {
-    var 
-      data    = {}, 
-      require = [],
-      parts   = string.replace(/[ ]{2,}/g," ").split(" "), 
-      type    = parts[0], 
-      url     = parts[1];
-    
-    if(parts[2]) {
-      parts[2].split(',').forEach(function(p){
-        var kv = p.split('='),
-        k = kv[0].replace(/^\*(.+)/, function(a,b){require.push(b); return b}),
-        v = kv[1] || null;
-        data[k] = v;
-      })
-    }
-    return {type:type, url:url, require:require, data:data}
-  }  
 
-  function buildRequestMethod(attrs, context, opts) {
-    return function(){
-      var args = arguments;
-      if(typeof attrs === "string") {
-        opts = parseMethodString(attrs);
-      } else {
-        opts = extend({type:"GET",url:"",data:{},require:[]}, attrs);
-        if(typeof opts.require === "string") opts.require = opts.require.split(',');
-      }
-
-      opts.require.forEach(function(k,i){
-        if(args[i] !== undefined) opts.data[k] = args[i]
-      });
-
-      opts.url = opts.url.replace(/(\(\?)?:(\w+)/g, function(a,b,c){
-        return (opts.require.indexOf(c)>-1) ? delete opts.data[c] && args[opts.require.indexOf(c)] : context[c];
-      })
-
-      extend(opts.data, args[opts.require.length] || {});
-      delete opts.require
-      return request(opts, context);
-    }
-  }
 
   // This is just for nice console objects
   var namedFunction = function (name, fn) {
-    name = name && name.replace(/\s/g,'') || "Object";
-    return (new Function("return function(call){return function "+name+"(){return call(this,arguments)}}")())(Function.apply.bind(fn));
+    var fstring;
+    var fname = (name) ? name.replace(/\s/g,'') : "Object";
+    var fstring = [
+      "return function(call){return function ",
+      "(){return call(this,arguments)}}"
+    ].join(fname);
+    return (new Function(fstring)())(Function.apply.bind(fn));
   }
+
+
+
+  function applyConfig(obj){
+    var json = JSON.stringify(obj).replace(/\{config:([^}]+)\}/g, function(match, key){
+      if(config[key] === undefined) {
+        throw("'" + key + "' must be set in config.");
+      }
+      return config[key];
+    })
+    return JSON.parse(json);
+  }
+
+
+ function buildRequest(attrs, resource) {
+    return function(){
+      var args = arguments;
+      var used = [];
+      var ajaxOpts = extend(true, {}, schema.ajaxOptions, resource.ajaxOptions);
+      var opts = extend({
+        url       : "",
+        data      : {},
+        defaults  : {},
+        require   : []
+      }, attrs);
+      
+      // check required
+      opts.require.forEach(function(key, index){
+        opts.data[key] = args[index] || opts.defaults[key];
+        if(opts.data[key] === undefined) {
+          throw("'" + key + "' is required.");
+        }
+      });
+      
+      // get query data from last argument
+      extend(opts.data, args[opts.require.length] || {});
+      
+      // use data to build url
+      var url = (schema.apiPath || "") + (resource.basePath || "") + opts.url;
+      url = url.replace(/\{:(\w+)\}/g, function(match, key) {
+        var str = (
+          (opts.require.indexOf(key) >- 1) ? args[opts.require.indexOf(key)] :
+          (opts.data[key] !== undefined)   ? opts.data[key] : undefined
+        );
+        if(str !== undefined) {
+          usedKeys.push(key);
+        }
+        return str || (resource.data && resource.data[key]) || match;
+      });
+
+      // remove used keys
+      used.forEach(function(key){
+        delete opts.data[key];
+      })
+
+      // build the request object
+      var requestObj = extend(true, ajaxOpts, {
+        url     : url,
+        data    : opts.data,
+        type    : opts.type || "get",
+        headers : opts.headers
+      })
+
+      return request(applyConfig(requestObj));
+    }
+  }
+
+
 
   var namespace = {};
 
@@ -125,43 +176,53 @@ var ApiWrapper = function(schema) {
   if(schema.resources) {
     for(var resource in schema.resources) {
       namespace[resource] = (function (props){
+
         var 
+          rfn,
           require  = props.require  || [],
           defaults = props.defaults || [],
-          methods  = props.methods  || {};
+          methods  = props.methods  || {},
 
-        return namedFunction(resource, function(){
-          var i, args = arguments;
-          require.forEach(function(r,i){
-            this[r] = args[i] || defaults[r] || undefined;
-            if(this[r] === undefined) throw("'" + r + "' is required.")
-          }.bind(this))
+        rfn =  namedFunction(resource, function(){
+          var args    = arguments;
+          var rsrc    = extend({data: {}}, props);
+          var fn      = namedFunction(resource, function(){});
 
-          // class methods
+          // check resource requires
+          require.forEach(function(key, index){
+            rsrc.data[key] = args[index] || defaults[key];
+            if(rsrc.data[key] === undefined) {
+              throw("'" + key + "' is required.");
+            }
+          });
+
           for(var method in methods) {
-            this[method] = buildRequestMethod(methods[method], this);
+            fn.prototype[method] = buildRequest(methods[method], rsrc);
           }
-        })
+          return new fn();
+        });
+
+        // static methods
+        for(var method in props.static) {
+          rfn[method] = buildRequest(props.static[method], this);
+        }
+
+        return rfn;
       })(schema.resources[resource]);
     }
   }
 
-  // Top Level Resource Methods
-  if(schema.resourceMethods) {
-    for(var method in schema.resourceMethods) {
-      namespace[method] = (function(m){
-        var F = namedFunction(m, function(args){return namespace[m].apply(this, args)})
-        F.prototype = namespace[m].prototype;
-        return function() {return new F(arguments);}
-      })(schema.resourceMethods[method])
-    }
-  }
 
   // Top Level Methods
   if(schema.methods) {
     for(var method in schema.methods) {
-      namespace[method] = buildRequestMethod(schema.methods[method], this);
+      namespace[method] = buildRequest(schema.methods[method], this);
     }
+  }
+
+  namespace.config = function(key, val) {
+    if(val) config[key] = val;
+    return config[key];
   }
   
   var F = namedFunction(schema.name, function(){})
