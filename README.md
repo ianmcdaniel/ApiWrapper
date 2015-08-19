@@ -17,52 +17,47 @@ Create a JSON object to describe your api.
         },
       },
   
-      methods: {
-        createPost    : "POST  posts/   *name",
-        createUser    : "POST  users/   *name",
-        createComment : "POST  posts/:post_id/comments   *post_id,body",
-      },
-  
-      resourceMethods: {
-        getUser: "User,
-        getPost: "Post",
-        getComment: "Comment"
-      },
-  
       resources: {
   
         User:{
-          require: ["id"],
-          defaults: {
-            id: "me"
+          require  : ["id"],
+          defaults : {id: "me"},
+          basePath : "users/{:id}",
+          methods  : {
+            fetch         : {},
+            update        : {type: "put"},
+            destroy       : {type: "delete"},
+            posts         : {type: "get"  , url: "posts/"},
+            createPost    : {type: "post" , url: "posts/", require:['title', 'body']}
           },
-          methods: {
-            fetch         : "GET      users/:id",
-            update        : "PUT      users/:id",
-            destroy       : "DELETE   users/:id",
-            posts         : "GET      users/:id/posts/",
-            createPost    : "POST     users/:id/posts/"
+          static: {
+            new: {type: "post"  , url: "users/", require: ['name', 'email']}
           }
+          
         },
   
         Post: {
           require: ["id"],
+          basePath : "posts/{:id}",
           methods: {
-            fetch         : "GET      posts/:id",
-            update        : "PUT      posts/:id",
-            destroy       : "DELETE   posts/:id",
-            comments      : "GET      posts/:id/posts/",
-            createComment : "POST     posts/:id/comments/       *body",
-            tagPost       : "POST     posts/:id/tag/:tag_name   *tag_name"
+            fetch         : {},
+            update        : {type: "put"},
+            destroy       : {type: "delete"},
+            comments      : {type: "get"  , url: "comments/"},
+            
+            commentsByAuthor : {type: "get"  , url: "comments/{:author_name}"  , require: ['author_name']},
+            createComment    : {type: "get"  , url: "comments/"                , require: ['body']},
+            tagPost          : {type: "post" , url: "tags/{:name}"             , require:['name']}
           }        
         },
   
         Comment: {
           require: ["id"],
+          basePath: "comments/{:id}",
           methods: {
-            fetch         : "GET      comments/:id",
-            update        : "PUT      comments/:id",
-            destroy       : "DELETE   comments/:id"
+            fetch         : {},
+            update        : {type: "put"},
+            destroy       : {type: "delete"}
           }
         }
   
@@ -73,32 +68,36 @@ Create a JSON object to describe your api.
 Then you can access it like this:
   
   
-    var myUser = BlogAPI.getUser();
+    var myUser = BlogAPI.User();
     
     // makes an ajax call to http://api.blogapp.com/users/me
     myUser.fetch()
   
     var anotherUser = BlogAPI.getUser(123);
     
-    // makes an ajax call to http://api.blogapp.com/users/123
+    // http://api.blogapp.com/users/123
     anotherUser.fetch()
   
-    // makes an ajax call to http://api.blogapp.com/users/123/posts?sort_by=date
+    // http://api.blogapp.com/users/123/posts?sort_by=date
     anotherUser.posts({sort_by:"date"})
+    
+    // Sends a post request to http://api.blogapp.com/users/
+    // with name and email parameters
+    BlogAPI.User.new("jane", "jane@example.com");
   
   
-    var myPost = BlogAPI.getPost(123);
+    var myPost = BlogAPI.Post(123);
   
-    // makes an ajax call to http://api.blogapp.com/posts/123
+    // http://api.blogapp.com/posts/123
     mypost.fetch()
   
-    // makes an ajax call to http://api.blogapp.com/posts/123/comments
+    // http://api.blogapp.com/posts/123/comments
     mypost.comments()
   
-    // makes an ajax call to http://api.blogapp.com/posts/123/comments?page=2
+    // http://api.blogapp.com/posts/123/comments?page=2
     mypost.comments({page:2})
     
-    // makes an ajax call to http://api.blogapp.com/posts/123/tag/favorite
+    // http://api.blogapp.com/posts/123/tag/favorite
     mypost.tagPost("favorite")
 
   
