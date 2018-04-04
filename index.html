@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>api wrapper</title>
+
+  <script src="api_wrapper.js"></script>
+
+  <script>
+
+    var TrexAPI = new ApiWrapper({
+
+      name: "TranslationExchange",
+
+      apiPath: "https://api.translationexchange.com/v1/",
+
+      ajaxOptions: {
+        data:{
+          access_token: "{config:token}"
+        }
+      },
+
+      methods: {
+        "languages": {url: "languagues"}
+      },
+
+      resources: {
+        User:{
+          require: ["id"],
+          basePath: 'users/{:id}',
+          methods: {
+            fetch       : {},
+            update      : {type: "put"    , url: "users/{:id}"},
+            destroy     : {type: "delete" , url: "users/{:id}"},
+            
+            posts       : {type: "get"    , url: "users/{:id}/posts/", data: {sort: "created_at"}},
+            createPost  : {type: "post"   , url: "users/{:id}/posts/", require: ["body"]}
+          },
+          static: {
+            create      : {type: "post"   , url: "users/xx{:id}", require:['id']}
+          }
+        }
+
+      }
+    });
+
+
+
+    // user: {
+    //   require: ["id"],
+    //   basePath: 'users/{:id}',
+    //   resources: {
+    //     fetch: { model: "user" },                 // user(123).fetch()
+    //     oauth: { model: "oauth", url: "/oauth" }  // user(123).oauth()
+    //   },
+    //   collections: {
+    //     projects  : { model: "project" , url: "projects/", data: {sort: "created_at"} },
+    //     charges   : { model: "charge"  , url: "charges/" },
+    //     requests  : { model: "request" , url: "requests/" },
+    //     orders    : { model: "order"   , url: "orders/" }, // user(123).orders()
+    //   },
+    //   actions: {
+    //     update      : { type: "put"},    //user(123).update(:data)
+    //     destroy     : { type: "delete"}, //user(123).destroy()
+    //   },
+    //   static: {
+    //     create      : { model: "user", type: "post", url: "users/", require:['email']} //user.create(:email)
+    //   }
+    // },
+
+    // project: {
+
+    // }
+
+    
+
+
+
+
+
+
+
+
+
+  </script>
+
+  
+</head>
+<body>
+
+</body>
+</html>

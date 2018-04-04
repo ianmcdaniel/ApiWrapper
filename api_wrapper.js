@@ -1,4 +1,4 @@
-var ApiWrapper = function(schema) {
+var ApiWrapper = function(schema, options) {
 
   var config = {};
 
@@ -139,8 +139,12 @@ var ApiWrapper = function(schema) {
       extend(opts.data, args[opts.require.length] || {});
       
       // use data to build url
-      var url = (schema.apiPath || "") + (resource.basePath || "") + opts.url;
-      url = url.replace(/\{:(\w+)\}/g, function(match, key) {
+      var path = [];
+      if(schema.apiPath)    path.push(schema.apiPath);
+      if(resource.basePath) path.push(resource.basePath);
+      if(opts.url)          path.push(opts.url);
+      
+      var url = path.join('/').replace(/\{:(\w+)\}/g, function(match, key) {
         var str = (
           (opts.require.indexOf(key) >- 1) ? args[opts.require.indexOf(key)] :
           (opts.data[key] !== undefined)   ? opts.data[key] : undefined
